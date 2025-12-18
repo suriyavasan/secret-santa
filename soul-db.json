@@ -1,0 +1,16 @@
+{
+  "souls": {
+    "1094730c-6a84-4d6d-ae23-a8b30f4d71ce": {
+      "id": "1094730c-6a84-4d6d-ae23-a8b30f4d71ce",
+      "recoveryPhrase": "r18a8c-0d9ff3-ssj0qf-ngbl1u",
+      "persona": "Christ Mom",
+      "wallets": [
+        "0x5436ad0139c9c8046cbba9b899a7385a6780195f"
+      ],
+      "createdAt": 1766048529928
+    }
+  },
+  "walletIndex": {
+    "0x5436ad0139c9c8046cbba9b899a7385a6780195f": "1094730c-6a84-4d6d-ae23-a8b30f4d71ce"
+  }
+}
