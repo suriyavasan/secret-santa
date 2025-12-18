@@ -53,6 +53,19 @@ function processGroup(names: string[]): User[] {
         [users[i], users[j]] = [users[j], users[i]];
     }
 
+    // Enforce Rishikhesh Annadurai -> Shamyuktha if both are in this group
+    const rishikheshIdx = users.findIndex(u => u.name === "Rishikhesh Annadurai");
+    const shamyukthaIdx = users.findIndex(u => u.name === "Shamyuktha");
+
+    if (rishikheshIdx !== -1 && shamyukthaIdx !== -1) {
+        // We want the person at (rishikheshIdx + 1) to be Shamyuktha
+        const targetIdx = (rishikheshIdx + 1) % users.length;
+        if (targetIdx !== shamyukthaIdx) {
+            // Swap whoever is at targetIdx with Shamyuktha
+            [users[targetIdx], users[shamyukthaIdx]] = [users[shamyukthaIdx], users[targetIdx]];
+        }
+    }
+
     // Circular Assignment
     for (let i = 0; i < users.length; i++) {
         const currentUser = users[i];
