@@ -11,9 +11,15 @@ export async function POST() {
 
 async function handleReset() {
     try {
+        console.log("Starting database reset...");
         await resetDB();
         return NextResponse.json({ success: true, message: 'Database reset and remixed.' });
-    } catch (error) {
-        return NextResponse.json({ success: false, error: 'Failed to reset database' }, { status: 500 });
+    } catch (error: any) {
+        console.error('Reset Error:', error);
+        return NextResponse.json({
+            success: false,
+            error: 'Failed to reset database',
+            details: error.message || String(error)
+        }, { status: 500 });
     }
 }
