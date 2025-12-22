@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
         // Update DB
         const publicPath = `/uploads/${filename}`;
-        const result = updateProof(userId, publicPath);
+        const result = await updateProof(userId, publicPath);
 
         if (!result.success) {
             return NextResponse.json({ error: result.message }, { status: 400 });

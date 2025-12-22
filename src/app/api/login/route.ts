@@ -9,11 +9,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'ID and Wallet required' }, { status: 400 });
         }
 
-        const user = getUserById(id); // Fetch user first
+        const user = await getUserById(id); // Fetch user first
 
         if (!user) {
             // If user doesn't exist, proceed to claim for the first time
-            const result = claimUser(id, wallet);
+            const result = await claimUser(id, wallet);
 
             if (!result.success) {
                 return NextResponse.json({ error: result.message }, { status: 400 });
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
                 // For now, let's assume if wallet matches, it's a successful "claim" or verification.
                 // If claimUser updates existing user, call it. Otherwise, just return existing user.
                 // Assuming claimUser can handle updates or re-claiming if wallet matches.
-                const result = claimUser(id, wallet);
+                const result = await claimUser(id, wallet);
 
                 if (!result.success) {
                     return NextResponse.json({ error: result.message }, { status: 400 });
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
             }
         } else {
             // User exists but has no walletAddress (first time claim for an existing ID)
-            const result = claimUser(id, wallet);
+            const result = await claimUser(id, wallet);
 
             if (!result.success) {
                 return NextResponse.json({ error: result.message }, { status: 400 });

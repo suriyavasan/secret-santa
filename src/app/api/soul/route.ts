@@ -9,10 +9,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Wallet address required' }, { status: 400 });
         }
 
-        let soul = getSoulByWallet(wallet);
+        let soul = await getSoulByWallet(wallet);
 
         if (!soul) {
-            soul = createSoul(wallet);
+            soul = await createSoul(wallet);
         }
 
         return NextResponse.json({ soul });

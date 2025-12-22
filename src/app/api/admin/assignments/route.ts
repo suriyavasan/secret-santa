@@ -3,7 +3,7 @@ import { getAllUsers } from '@/lib/db';
 
 export async function GET() {
     try {
-        const users = getAllUsers();
+        const users = await getAllUsers();
 
         // Create a simple list of Name -> ID
         const assignments = users.map(user => ({

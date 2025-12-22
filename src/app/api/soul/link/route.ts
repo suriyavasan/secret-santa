@@ -9,7 +9,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Wallet and Recovery Phrase required' }, { status: 400 });
         }
 
-        const result = linkWalletToSoul(wallet, recoveryPhrase);
+        const result = await linkWalletToSoul(wallet, recoveryPhrase);
 
         if (!result.success) {
             return NextResponse.json({ error: result.message }, { status: 400 });

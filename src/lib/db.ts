@@ -1,8 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import { kv } from '@vercel/kv';
 import crypto from 'crypto';
-
-const DB_PATH = path.join(process.cwd(), 'users-db.json');
 
 export type User = {
     id: string;
@@ -12,7 +9,6 @@ export type User = {
     proofImage?: string | null;
 };
 
-// Demographic Groups
 const INDIA_NAMES = [
     "Shamyuktha",
     "Suriyanarayanan R Srinivasan",
@@ -33,40 +29,33 @@ const GLOBAL_NAMES = [
     "PUPU"
 ];
 
-let usersCache: Record<string, User> = {};
-
 function generateHash(): string {
-    return crypto.randomBytes(8).toString('hex').toUpperCase(); // 16 char hex
+    return crypto.randomBytes(8).toString('hex').toUpperCase();
 }
 
 function processGroup(names: string[]): User[] {
-    // Create users
     let users: User[] = names.map(name => ({
         id: generateHash(),
         name,
         walletAddress: null
     }));
 
-    // Shuffle (Fisher-Yates)
+    // Shuffle
     for (let i = users.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [users[i], users[j]] = [users[j], users[i]];
     }
 
-    // Enforce Rishikhesh Annadurai -> Shamyuktha if both are in this group
     const rishikheshIdx = users.findIndex(u => u.name === "Rishikhesh Annadurai");
     const shamyukthaIdx = users.findIndex(u => u.name === "Shamyuktha");
 
     if (rishikheshIdx !== -1 && shamyukthaIdx !== -1) {
-        // We want the person at (rishikheshIdx + 1) to be Shamyuktha
         const targetIdx = (rishikheshIdx + 1) % users.length;
         if (targetIdx !== shamyukthaIdx) {
-            // Swap whoever is at targetIdx with Shamyuktha
             [users[targetIdx], users[shamyukthaIdx]] = [users[shamyukthaIdx], users[targetIdx]];
         }
     }
 
-    // Circular Assignment
     for (let i = 0; i < users.length; i++) {
         const currentUser = users[i];
         const nextUser = users[(i + 1) % users.length];
@@ -76,72 +65,39 @@ function processGroup(names: string[]): User[] {
     return users;
 }
 
-function loadDB() {
-    try {
-        if (fs.existsSync(DB_PATH)) {
-            const data = fs.readFileSync(DB_PATH, 'utf-8');
-            usersCache = JSON.parse(data);
-        } else {
-            const indiaUsers = processGroup(INDIA_NAMES);
-            const globalUsers = processGroup(GLOBAL_NAMES);
+async function ensureInitialized() {
+    const exists = await kv.exists('users');
+    if (!exists) {
+        const indiaUsers = processGroup(INDIA_NAMES);
+        const globalUsers = processGroup(GLOBAL_NAMES);
+        const allUsers = [...indiaUsers, ...globalUsers];
 
-            // Merge into cache
-            [...indiaUsers, ...globalUsers].forEach(u => {
-                usersCache[u.id] = u;
-            });
-
-            saveDB();
-        }
-    } catch (e) {
-        console.error("Failed to load DB", e);
-    }
-}
-
-const CSV_PATH = path.join(process.cwd(), 'assignments.csv');
-
-function saveCSV() {
-    try {
-        const headers = ['User ID', 'User Name', 'Wallet Address', 'Assigned ID', 'Assigned Name', 'Proof Status'];
-        const rows = Object.values(usersCache).map(user => {
-            const assignedTo = user.assignedToId ? usersCache[user.assignedToId] : null;
-            return [
-                user.id,
-                user.name,
-                user.walletAddress || 'Not Claimed',
-                assignedTo?.id || 'N/A',
-                assignedTo?.name || 'N/A',
-                user.proofImage ? 'Uploaded' : 'Pending'
-            ].join(',');
+        const usersObj: Record<string, User> = {};
+        allUsers.forEach(u => {
+            usersObj[u.id] = u;
         });
 
-        const csvContent = [headers.join(','), ...rows].join('\n');
-        fs.writeFileSync(CSV_PATH, csvContent);
-    } catch (e) {
-        console.error("Failed to save CSV", e);
+        await kv.hset('users', usersObj);
     }
 }
 
-function saveDB() {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(usersCache, null, 2));
-        saveCSV();
-    } catch (e) {
-        console.error("Failed to save DB", e);
-    }
+export async function getUserById(id: string): Promise<User | null> {
+    await ensureInitialized();
+    return await kv.hget<User>('users', id);
 }
 
-loadDB();
-
-export function getUserById(id: string): User | null {
-    return usersCache[id] || null;
+export async function getAllUsers(): Promise<User[]> {
+    await ensureInitialized();
+    const usersObj = await kv.hgetall<Record<string, User>>('users');
+    return usersObj ? Object.values(usersObj) : [];
 }
 
-export function getAllUsers(): User[] {
-    return Object.values(usersCache);
-}
+export async function claimUser(id: string, wallet: string) {
+    await ensureInitialized();
+    const users = await kv.hgetall<Record<string, User>>('users');
+    if (!users) return { success: false, message: 'Database error.' };
 
-export function claimUser(id: string, wallet: string): { success: boolean; message: string; user?: User; assignedPerson?: User } {
-    const user = usersCache[id];
+    const user = users[id];
     const normalizedWallet = wallet.toLowerCase();
 
     if (!user) {
@@ -152,42 +108,30 @@ export function claimUser(id: string, wallet: string): { success: boolean; messa
         return { success: false, message: 'This ID is already claimed.' };
     }
 
-    const existingClaim = Object.values(usersCache).find(u => u.walletAddress === normalizedWallet && u.id !== id);
+    const existingClaim = Object.values(users).find(u => u.walletAddress === normalizedWallet && u.id !== id);
     if (existingClaim) {
         return { success: false, message: `Wallet already linked to ${existingClaim.name}.` };
     }
 
     user.walletAddress = normalizedWallet;
-    saveDB();
+    await kv.hset('users', { [id]: user });
 
-    const assignedPerson = user.assignedToId ? usersCache[user.assignedToId] : undefined;
+    const assignedPerson = user.assignedToId ? users[user.assignedToId] : undefined;
 
     return { success: true, message: 'Identity verified.', user, assignedPerson };
 }
 
-export function updateProof(id: string, proofPath: string): { success: boolean; message: string } {
-    const user = usersCache[id];
+export async function updateProof(id: string, proofPath: string) {
+    await ensureInitialized();
+    const user = await kv.hget<User>('users', id);
     if (!user) return { success: false, message: 'User not found' };
 
     user.proofImage = proofPath;
-    saveDB();
+    await kv.hset('users', { [id]: user });
     return { success: true, message: 'Proof uploaded' };
 }
 
-export function resetDB() {
-    try {
-        if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH);
-        if (fs.existsSync(CSV_PATH)) fs.unlinkSync(CSV_PATH);
-
-        // Clear uploads
-        const uploadDir = path.join(process.cwd(), 'public/uploads');
-        if (fs.existsSync(uploadDir)) {
-            fs.rmSync(uploadDir, { recursive: true, force: true });
-        }
-
-        usersCache = {};
-        loadDB(); // Re-initialize with shuffle
-    } catch (e) {
-        console.error("Failed to reset DB", e);
-    }
+export async function resetDB() {
+    await kv.del('users');
+    await ensureInitialized();
 }
